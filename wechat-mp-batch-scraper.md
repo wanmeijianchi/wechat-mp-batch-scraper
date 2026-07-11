@@ -14,15 +14,23 @@
 >
 > Agent 读完方案会像「装了 Skill」一样先向你确认参数，再开工。
 
-> 💬 **Agent 读完后会怎么跟你谈需求（这是它应该主动说的）**
+> 💬 **Agent 读完后会怎么跟你谈需求（它应该主动说的「文章链接怎么给我」3 选 1）**
 >
-> 它应当先说类似这样的话，把需求聊清楚再动手：
+> 它应当先说类似这样的话，把需求聊清楚、并给出 3 种方式（**方式 1 全自动为推荐**），再动手：
 >
-> > 我已掌握公众号文章批量抓取方案。想抓【X】号的【Y】合集正文，我需要拿到文章链接。最快的办法：你打开 down.mptext.top 用微信扫码登录一次，在页面上复制那串「API 密钥」（叫 X-Auth-Key，有效期 4 天，不是你微信密码）发给我——我拿到后就能**自动**把该合集的链接和正文全部扒下来、整理成 Excel，你什么都不用再管。如果你更方便，也可以直接把链接列表或 Excel 发我。你选哪种？
+> > 我已掌握公众号文章批量抓取方案。想抓【X】号的【Y】合集正文，我需要拿到文章链接。给你 3 种方式，推荐第 1 种（最省事、全自动）：
+> >
+> > **方式 1（推荐 · 全自动）**：你打开 https://down.mptext.top/dashboard/article ，用微信扫码登录一次；登录后网站里有个「API」页面，会给你一串「密钥」（叫 X-Auth-Key，有效期 4 天，**不是你微信密码**）。把这串密钥发给我，我就能自己调接口，**自动**搜到【Y】合集所有文章的链接、连正文一起扒下来、整理成 Excel——你什么都不用再管。
+> >
+> > **方式 2**：你不想搞登录也行——直接把文章链接发给我，或给我一个含链接的 Excel，我直接开始抓正文。
+> >
+> > **方式 3（手动 · 零代码）**：你自己在 mptext.top 登录后，后台勾选【Y】合集的文章、点「导出」选 Excel/JSON 下载，把文件发我即可。
+> >
+> > 你选哪种？
 >
-> 关键点（写进方案给 Agent 的约束）：**只要用户给了 X-Auth-Key，Agent 必须全程自动化**（account 搜号 → article 拉链接 → download 下正文 → 填表），不要再追问；只有拿不到 key 时，才退而求其次让用户直接给链接/Excel。你照着回它就行，全程不用知道任何链接或代码。
+> **给 Agent 的硬约束**：① 只要用户给了 X-Auth-Key，必须全程自动化（account 搜号 → article 拉链接 → download 下正文 → 填表），不要再追问；② 只有拿不到 key 时，才退而求其次让用户给链接/Excel（方式 2）或在后台导出（方式 3）；③ **绝不要自己去爬搜索引擎**拿链接。你照着回它就行，全程不用知道任何链接或代码。
 
-> 📌 **示例（仅作演示，可换成任意公众号）**：比如你回「抓 *神奇老太* 的合集 *神奇老太探店记* 的正文」，那对应上面 ①=神奇老太 ②=神奇老太探店记 ③=要正文 ④=按你当时给的链接来源。示例只是说明用法，复制块本身不含这些信息。
+> 📌 **示例（仅作演示，可换成任意公众号）**：比如你回「抓 *神奇老太* 的合集 *神奇老太探店记* 的正文」，那对应上面【X】=神奇老太 【Y】=神奇老太探店记。示例只是说明用法，复制块本身不含这些信息。
 
 > 🔗 **获取链接前置（人在回路，必做）**：方案本身不假设能免登录自动拿别人号的链接。详见下文「零、获取文章链接列表」一节——需要先去 mptext.top 登录拿 `X-Auth-Key`，或你直接给链接/Excel。
 
@@ -43,17 +51,25 @@
 
 **结论**：跨账号获取别人公众号（尤其某个合集）的文章链接，没有免认证的可靠自动方式。必须由**用户介入**。
 
-### 解法：用户在 mptext.top 登录后提供 key 或链接
+### 文章链接怎么给你（3 种方式，推荐第 1 种全自动）
 
-mptext.top（`down.mptext.top`）提供公众号文章导出能力，底层是 `wechat-article-exporter`。所有 API 需在 Header 带 `X-Auth-Key`（用户微信扫码登录后，在网站 API 页面查看，有效期 **4 天**）。
+mptext.top（`down.mptext.top`）是专门用来下载公众号文章的网站，底层是 `wechat-article-exporter`。所有 API 需在 Header 带 `X-Auth-Key`（用户微信扫码登录后，在网站 API 页面查看，有效期 **4 天**，**不是微信密码**）。
 
-**方式 1（推荐，最稳）**：用户登录 mptext.top → 后台「公众号管理」添加该号并同步 → 「文章下载」页勾选目标合集的文章 → 右上角「导出」选 Excel/JSON → 把文件/链接列表直接给 Agent。Agent 拿到链接就抓正文。
+**方式 1（推荐 · 全自动）**：你（用户）去 mptext.top 用微信扫码登录，把「API」页面的密钥（X-Auth-Key）给 Agent。**Agent 拿到后全自动干完**：account 搜号 → article 拉链接 → download 下正文 → 填表，你什么都不用再管。
 
-**方式 2（Agent 用 API 拉）**：用户把 `X-Auth-Key` 给 Agent，Agent 自己调 API 拉链接（见下）。
+**方式 2**：你不想搞登录——直接把文章链接列表，或含链接的 Excel 发给 Agent，它直接开始抓正文。
 
-**兜底**：两者都没有时，Agent **不要瞎爬搜索引擎**，直接问用户要链接列表/Excel。
+**方式 3（手动 · 零代码，一步一步教用户做）**：你在 mptext.top 登录后，按下面步骤自己导出，再把文件给 Agent：
+1. 打开 https://down.mptext.top/dashboard/article
+2. 微信扫码登录
+3. 左侧「公众号管理」添加目标公众号并同步
+4. 进入「文章下载」页，勾选目标合集（如【Y】）的文章
+5. 右上角「导出」选 Excel / JSON 下载到本地
+6. 把文件或里面的链接列表发给 Agent
 
-### mptext.top API 用法（需 X-Auth-Key）
+**兜底**：三种都没有时，Agent **不要瞎爬搜索引擎**，直接问用户要链接列表/Excel。
+
+### mptext.top API 用法（需 X-Auth-Key，方式 1 由 Agent 执行）
 
 ```python
 import requests
@@ -92,7 +108,7 @@ while True:
 Agent 读完本方案后，应**先向用户确认**而不是自作主张：
 
 1. 目标公众号名 / 合集名确认（合集 ≠ 整个公众号，只抓指定合集）；
-2. 文章链接怎么来：有 `X-Auth-Key` 吗？还是你直接给链接/Excel？或去 mptext.top 后台导出？
+2. 文章链接怎么来（**优先问要不要走方式 1 全自动给 X-Auth-Key**）：有 `X-Auth-Key` 吗？还是直接给链接/Excel（方式 2）？或去 mptext.top 后台导出（方式 3）？
 3. 输出到哪个文件 / 路径。
 
 ---
@@ -169,8 +185,8 @@ import re
 def extract_body(html):
     soup = BeautifulSoup(html, "lxml")
     el = (soup.select_one("#js_content")
-           or soup.select_one(".rich_media_content")
-           or soup.select_one("#js_article"))
+          or soup.select_one(".rich_media_content")
+          or soup.select_one("#js_article"))
     if el:
         t = el.get_text("\n", strip=True)
         if len(t) >= 20:
@@ -223,8 +239,8 @@ def make_session():
 def extract_body(html):
     soup = BeautifulSoup(html, "lxml")
     el = (soup.select_one("#js_content")
-           or soup.select_one(".rich_media_content")
-           or soup.select_one("#js_article"))
+          or soup.select_one(".rich_media_content")
+          or soup.select_one("#js_article"))
     if el and len(el.get_text("\n", strip=True)) >= 20:
         return el.get_text("\n", strip=True)
     m = re.search(r'<meta property="og:description"[^>]*content="([^"]*)"', html)
