@@ -1,38 +1,99 @@
-# 微信公众号文章正文批量抓取技术方案（含反爬绕过与试错记录）
+# 微信公众号文章正文批量抓取技术方案（含反爬绕过、链接获取与试错记录）
 
-> 适用场景：手头有一份「公众号文章 URL 列表」（如 Excel 的某一列），想把每篇文章的**正文**扒下来，回填到表格的某一列，或存成归档。
-> 本文记录了从「直接抓 → 踩坑 → 跑通」的完整过程，以及最终沉淀下来的成熟方案。
+> 适用场景：需要把微信公众号文章正文批量扒下来，回填到表格某一列或做归档。
+> 本文记录从「直接抓 → 踩坑 → 跑通」的完整过程，以及最终方案。**第一版实测发现「获取文章链接列表」才是真正卡点，本版重点补上「人在回路」的解法。** 由 AI（Workbuddy）基于实操整理，供参考。
 
 > 🤖 **怎么用：复制一句话，Agent 就帮你干**
 >
-> 下面这段是「你发给 Agent 的唯一一句话」，**已经内置好技术方案链接**。**复制下面代码块里的内容**，直接粘给你的任意 Agent（Workbuddy / Claude Code / Codex / Hermes / openClaw 等）即可。你只需把【】里换成你的公众号名（或粘贴文章/合集链接）。
+> 下面这段是「你发给 Agent 的唯一一句话」，**已内置技术方案链接**。**复制下面代码块内容**，直接粘给你的任意 Agent（Workbuddy / Claude Code / Codex / Hermes / openClaw 等）即可。你只需把【】换成公众号名与合集名。
 >
 > ```
-> 请先打开并阅读这个技术方案：https://raw.githubusercontent.com/wanmeijianchi/wechat-mp-batch-scraper/main/wechat-mp-batch-scraper.md
-> 然后按里面的「Agent 实操流程」帮我做：把微信公众号【在这里填公众号名称，或粘贴文章/合集链接】的历史文章正文批量抓取，整理成 Excel（新增一列「文章内容」）。
-> 获取公众号文章/合集链接的方法参考 https://down.mptext.top/dashboard/article 与 https://docs.mptext.top/llms-full.txt ；仅限个人用途，注意版权。
+> 请先阅读技术方案：https://raw.githubusercontent.com/wanmeijianchi/wechat-mp-batch-scraper/main/wechat-mp-batch-scraper.md
+> 帮我抓取微信公众号【神奇老太】的合集【神奇老太探店记】的文章正文，整理成 Excel（新增一列「文章内容」）。
+> 注意：文章链接需要你（用户）提供——开局请先问我：有 mptext.top 的 X-Auth-Key 吗？或直接给我链接列表 / Excel？不要自己去爬搜索引擎（实测搜狗/百度/Bing/Google 都拿不到链接）。版权仅限个人用途。
 > ```
 >
-> Agent 读完方案后，会像「装了 Skill」一样反过来引导你，比如问「你想弄哪个公众号 / 合集？输出到哪？」——你按它的引导回复即可。以下两种是它**引导你时你回的话**（不是你一开始要说的话）：
-> - **模板 A（你直接给链接 / 表格）**：
->   > 帮我把这些微信公众号文章链接的正文批量抓下来，填到 Excel 的「文章内容」列：[这里粘贴 xlsx 路径或链接列表]
-> - **模板 B（只说公众号名）**：
->   > 帮我把微信公众号【公众号名称】的历史文章（或某个合集）正文批量抓取，整理成 Excel。版权仅限个人用途。
+> Agent 读完方案会像「装了 Skill」一样先向你确认参数（公众号名、合集名、链接来源），再开工。
 
-> 🔗 **进阶：手动拿链接 / 看文档（可选）**
->
-> - 操作后台：https://down.mptext.top/dashboard/article
-> - 说明文档（llms-full）：https://docs.mptext.top/llms-full.txt
-> - 上面两个链接已内置在「复制给 Agent 的那句话」里，无需你手动操作。
+> 🔗 **获取链接前置（人在回路，必做）**：方案本身不假设能免登录自动拿别人号的链接。详见下文「零、获取文章链接列表」一节——需要先去 mptext.top 登录拿 `X-Auth-Key`，或你直接给链接/Excel。
+
+---
+
+## 零、获取文章链接列表（前置必做，关键卡点）
+
+### 为什么这是第一版的头号卡点
+
+第一版让 Agent 直接开干，结果**拿不到文章链接列表**——自动尝试的 6 种方法全失败：
+
+| 方法 | 结果 | 原因 |
+|------|------|------|
+| mptext.top API（无 key） | 400 / 空 | 所有端点需 `X-Auth-Key`，未登录无 key |
+| mptext.top 网页端 | 拿不到 | Nuxt.js SPA，curl 取不到内容 |
+| 搜狗微信搜索 | 空 | 搜索结果不返回文章链接 |
+| 百度 / Bing / Google | 超时 / 被过滤 | 反爬 / 区域限制 |
+
+**结论**：跨账号获取别人公众号（尤其某个合集）的文章链接，没有免认证的可靠自动方式。必须由**用户介入**。
+
+### 解法：用户在 mptext.top 登录后提供 key 或链接
+
+mptext.top（`down.mptext.top`）提供公众号文章导出能力，底层是 `wechat-article-exporter`。所有 API 需在 Header 带 `X-Auth-Key`（用户微信扫码登录后，在网站 API 页面查看，有效期 **4 天**）。
+
+**方式 1（推荐，最稳）**：用户登录 mptext.top → 后台「公众号管理」添加该号并同步 → 「文章下载」页勾选目标合集的文章 → 右上角「导出」选 Excel/JSON → 把文件/链接列表直接给 Agent。Agent 拿到链接就抓正文。
+
+**方式 2（Agent 用 API 拉）**：用户把 `X-Auth-Key` 给 Agent，Agent 自己调 API 拉链接（见下）。
+
+**兜底**：两者都没有时，Agent **不要瞎爬搜索引擎**，直接问用户要链接列表/Excel。
+
+### mptext.top API 用法（需 X-Auth-Key）
+
+```python
+import requests
+
+BASE = "https://down.mptext.top"
+AUTH = "你的X-Auth-Key"          # 用户登录后网站 API 页面查看，有效期 4 天
+H = {"X-Auth-Key": AUTH}
+
+# 1) 搜公众号，拿 fakeid
+r = requests.get(f"{BASE}/api/public/v1/account", params={"keyword": "神奇老太"}, headers=H, timeout=20)
+print(r.json())                  # 从返回里取该号的 fakeid
+fakeid = "xxxxxxxx"              # 手动填上面拿到的 fakeid
+
+# 2) 分页拉文章列表（size 最大 20，靠 begin 翻页）
+links = []
+begin = 0
+while True:
+    r = requests.get(f"{BASE}/api/public/v1/article",
+                     params={"fakeid": fakeid, "begin": begin, "size": 20}, headers=H, timeout=20)
+    items = r.json().get("data", {}).get("list", [])
+    if not items:
+        break
+    for it in items:
+        links.append(it.get("url") or it.get("link") or it.get("article_url"))
+    begin += 20
+
+# 3)（可选）直接拿正文，连自己抓都省了——带 key 时绕开微信风控
+# txt = requests.get(f"{BASE}/api/public/v1/download",
+#                    params={"url": links[0], "format": "text"}, headers=H).text
+```
+
+> 注：API 返回的字段名（url/link/article_url）以实际响应为准，先 `print(r.json())` 看一眼结构再取值。合集筛选在 UI 里勾选最省事；用 API 拿全号后也可按标题关键词过滤。
+
+### Agent 开局引导话术（skill 式，推荐）
+
+Agent 读完本方案后，应**先向用户确认**而不是自作主张：
+
+1. 目标公众号名 / 合集名确认（合集 ≠ 整个公众号，只抓指定合集）；
+2. 文章链接怎么来：有 `X-Auth-Key` 吗？还是你直接给链接/Excel？或去 mptext.top 后台导出？
+3. 输出到哪个文件 / 路径。
 
 ---
 
 ## 一、背景与目标
 
-有一份 Excel（`老太文章列表.xlsx`），共 147 行，结构如下：
+有一份 Excel（`老太文章列表.xlsx`），共 147 行：
 
 - 第 3 列 `链接`：每篇公众号文章的 `https://mp.weixin.qq.com/s/xxx` URL
-- 第 18 列 `文章内容`：目标列，初始为空，需要把对应正文填进去
+- 第 18 列 `文章内容`：目标列，初始为空，需把对应正文填进去
 
 目标：批量抓取 147 篇文章正文，回填到 `文章内容` 列，输出一份新表。
 
@@ -44,39 +105,31 @@
 
 ### 坑 1：直接抓取，正文是空的
 
-用 `requests` 抓文章页，页面确实返回了（约 2.3MB），用 BeautifulSoup 取 `#js_content`（微信正文容器）也能定位到元素，但 `get_text()` 出来是**空字符串**。
+用 `requests` 抓文章页，页面返回约 2.3MB，BeautifulSoup 取 `#js_content` 能定位到元素，但 `get_text()` 出来是**空字符串**。
 
-原因：微信公众号文章的正文是**前端 JS 动态注入**的，静态 HTML 里 `js_content` 这个 div 是空的，正文并不在初始文档里。
+原因：微信文章正文是**前端 JS 动态注入**，静态 HTML 里 `js_content` 是空壳。
 
 ### 坑 2：风控拦截「环境异常」
 
-换另一篇文章试，直接返回的是**只有 18KB 的验证页**，正文根本没有，页面文案是：
+换另一篇试，直接返回**只有 18KB 的验证页**，文案：
 
-> 环境异常，当前环境异常，完成验证后即可继续访问。去验证
+> 环境异常，当前环境异常，完成验证后即可继续访问。
 
-这是微信对「非微信客户端 + 陌生 IP（如云沙箱出口 IP）」的**反爬风控**。不是个别文章的问题，是整类请求会被拦。
+这是微信对「非微信客户端 + 陌生 IP（如云沙箱出口 IP）」的**反爬风控**。
 
-试过的解法（均无效）：
-- 换移动端 UA（iPhone Safari）→ 仍被拦
-- 单纯加重试 → 仍被拦
+试过无效：换移动端 UA、单纯加重试。
 
 ### 坑 3：`og:description` 不可靠
 
-发现部分文章的元信息 `<meta property="og:description">` 里竟**完整装着正文**（纯文本带换行）。但验证后发现它**不能依赖**：
-- 有的文章有（如第 1 篇，695 字恰好是全文）
-- 有的文章是空的（如第 2 篇，`og:description` 长度为 0）
-
-说明它是作者手填/平台偶发行为，不能当作通用正文来源。
+部分文章 `<meta property="og:description">` 里竟**完整装着正文**，但验证后发现不能依赖：有的有（695 字全文）、有的空（长度 0）。属偶发行为。
 
 ---
 
-## 三、最终成熟方案
+## 三、最终成熟方案（抓正文）
 
 ### 3.1 核心：预热会话绕过风控 ✅
 
-关键突破点：**先用同一个会话（Session）访问一次微信域名根 `https://mp.weixin.qq.com/`，拿到 `ua_id` 这个 cookie，再带着它去抓文章**，风控就放行了，返回正常的 3MB 完整页面。
-
-原理推测：微信根域先下发一个环境/设备 cookie，后续同会话请求被识别为「正常浏览环境」，不再触发验证页。
+**先用同一会话访问微信域名根 `https://mp.weixin.qq.com/` 拿到 `ua_id` cookie，再带着它抓文章**，风控放行，返回正常 3MB 页。
 
 ```python
 import requests
@@ -92,19 +145,13 @@ def make_session():
     return s
 ```
 
-抓单篇时务必带 `Referer`：
+抓单篇务必带 `Referer`：
 
 ```python
 s.get(url, headers={"Referer": "https://mp.weixin.qq.com/"}, timeout=25)
 ```
 
 ### 3.2 正文提取（容器优先 + 兜底）
-
-预热后页面完整，`#js_content` 里就有正文了。提取策略：
-
-1. 优先用 BeautifulSoup 取 `#js_content`（兜底 `.rich_media_content`、`#js_article`）；
-2. 若该容器文本过短/为空（图片分享型文章，正文其实是作者配文），则 fallback 到 `<meta property="og:description">`；
-3. 把 `og:description` 里的 `\x0a` 还原成换行。
 
 ```python
 from bs4 import BeautifulSoup
@@ -127,22 +174,22 @@ def extract_body(html):
 
 ### 3.3 节流与重试
 
-- 每篇之间随机 sleep 1~2 秒，降低触发限流/风控的概率；
-- 若某次返回仍含「环境异常」或页面过小（< 50KB），视为被拦，**重建会话（重新预热）后重试**，最多 3 次。
+- 每篇随机 sleep 1~2 秒；
+- 仍含「环境异常」或页面过小（< 50KB），**重建会话（重新预热）重试**，最多 3 次。
 
 ### 3.4 断点续跑
 
-147 篇是大批量，中途任何网络抖动都不该前功尽弃。做法：每抓完一篇，就把 `URL -> 正文` 写入本地缓存 JSON；重启脚本时跳过已有结果。
+每抓完一篇把 `URL -> 正文` 写本地缓存 JSON；重启跳过已完成。
 
-### 3.5 回填 Excel 的注意点
+### 3.5 回填 Excel 注意点
 
-- 用 `openpyxl` 载入原表，定位「链接」「文章内容」两列（按表头名找，别写死列号）；
-- Excel 单个单元格上限约 **32767 字**，超长正文截断到 32000 字并标注「已截断」；
-- **先备份原文件**，新结果写到新文件（如 `老太文章列表_带正文.xlsx`），不动原表。
+- `openpyxl` 按表头名定位列（别写死列号）；
+- 单元格上限约 **32767 字**，超长截断到 32000 并标注；
+- **先备份原文件**，结果写新文件。
 
 ---
 
-## 四、完整可运行代码（精简版）
+## 四、完整可运行代码（精简版，已有链接时）
 
 ```python
 import requests, re, time, json, random
@@ -186,7 +233,6 @@ def get_body(s, url):
         return extract_body(html), s
     return "", s
 
-# 载入缓存
 cache = json.load(open(CACHE, encoding="utf-8")) if __import__("os").path.exists(CACHE) else {}
 
 wb = openpyxl.load_workbook(SRC)
@@ -213,20 +259,23 @@ for row in ws.iter_rows(min_row=2):
 wb.save(OUT)
 ```
 
-实测结果：147 篇 **100% 抓取成功，0 失败**，正文 208~2788 字（平均 921 字），全程约 5 分钟。
+实测：147 篇 **100% 成功，0 失败**，正文 208~2788 字（平均 921 字），约 5 分钟。
+
+> 若你有 mptext.top 的 `X-Auth-Key`，正文也可直接用它的 `/api/public/v1/download?format=text` 拿，彻底绕开微信风控（见「零」节）。
 
 ---
 
 ## 五、适用边界与注意事项
 
-- **版权**：抓下来的正文归原作者/权利人，仅限个人合法用途（如自己的号做归档、分析），不要未经授权二次转发/分发。
-- **阅读量 / 点赞 / 评论**：本方案只拿到正文。要这些增强指标，必须你本人有公众号后台登录凭据（auth-key）或扫码登录，属于另一套凭据流程，不能绕过。
-- **频率风险**：别开太快，微信仍可能临时封 IP / 弹验证。随机节流 + 重试是底线。
-- **环境差异**：风控是否触发与运行 IP 强相关。本地常驻 IP 可能比云沙箱更稳；若批量大，建议在本人机器上跑。
+- **获取链接必须人在回路**：别人号的链接列表无免认证自动方式，需 mptext.top 登录拿 key / 后台导出，或用户直接提供。
+- **合集 ≠ 整个公众号**：抓指定合集要在 mptext.top 勾选该合集，或拿全号后按标题过滤。
+- **版权**：正文归原作者，仅限个人合法用途，勿未经授权转发。
+- **阅读量 / 点赞 / 评论**：本方案只拿正文；增强指标需本人公众号后台凭据，属另一套流程。
+- **频率风险**：别开太快，微信仍可能临时封 IP / 弹验证；建议在本机跑。
 - **依赖**：Python + `requests` / `beautifulsoup4` / `lxml` / `openpyxl`。
 
 ---
 
 ## 六、关键结论一句话
 
-> 微信文章正文不能直接抓：正文是 JS 注入的、且陌生 IP 会被风控拦。破解方法是**「先访问微信域名根预热拿 cookie，再同会话带 Referer 抓」**，正文就能从 `#js_content` 正常取出。
+> 微信文章正文不能直接抓（JS 注入 + 陌生 IP 风控），破解是「先访问域名根预热拿 cookie，再同会话带 Referer 抓」。但**更难的是「拿链接列表」**——必须用户在 mptext.top 登录拿 `X-Auth-Key` 或后台导出，Agent 别妄图爬搜索引擎。
