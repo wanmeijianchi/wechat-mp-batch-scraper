@@ -3,21 +3,27 @@
 > 适用场景：手头有一份「公众号文章 URL 列表」（如 Excel 的某一列），想把每篇文章的**正文**扒下来，回填到表格的某一列，或存成归档。
 > 本文记录了从「直接抓 → 踩坑 → 跑通」的完整过程，以及最终沉淀下来的成熟方案。
 
-> 🤖 **怎么跟你的 Agent 说（复制即用）**
+> 🤖 **怎么用：复制一句话，Agent 就帮你干**
 >
-> 把下面这句话（连同本方案对应的 **「技术方案链接」**）直接发给你的**任意一个 Agent** 都能用：Workbuddy / Claude Code / Codex / Hermes / openClaw 等。
+> 下面这段是「你发给 Agent 的唯一一句话」，**已经内置好技术方案链接**。**复制下面代码块里的内容**，直接粘给你的任意 Agent（Workbuddy / Claude Code / Codex / Hermes / openClaw 等）即可。你只需把【】里换成你的公众号名（或粘贴文章/合集链接）。
+>
+> ```
+> 请先打开并阅读这个技术方案：https://raw.githubusercontent.com/wanmeijianchi/wechat-mp-batch-scraper/main/wechat-mp-batch-scraper.md
+> 然后按里面的「Agent 实操流程」帮我做：把微信公众号【在这里填公众号名称，或粘贴文章/合集链接】的历史文章正文批量抓取，整理成 Excel（新增一列「文章内容」）。
+> 获取公众号文章/合集链接的方法参考 https://down.mptext.top/dashboard/article 与 https://docs.mptext.top/llms-full.txt ；仅限个人用途，注意版权。
+> ```
+>
+> Agent 读完方案后，会像「装了 Skill」一样反过来引导你，比如问「你想弄哪个公众号 / 合集？输出到哪？」——你按它的引导回复即可。以下两种是它**引导你时你回的话**（不是你一开始要说的话）：
 > - **模板 A（你直接给链接 / 表格）**：
 >   > 帮我把这些微信公众号文章链接的正文批量抓下来，填到 Excel 的「文章内容」列：[这里粘贴 xlsx 路径或链接列表]
-> - **模板 B（你只说公众号名，让它自己搞定）**：
->   > 你先读这个技术方案 <技术方案链接>，照着它帮我把微信公众号【公众号名称】的历史文章（或某个合集）正文批量抓取，整理成 Excel。获取文章链接的方法参考 down.mptext.top 和 docs.mptext.top/llms-full.txt；抓取正文用「先访问微信域名根预热拿 cookie、再同会话带 Referer 抓，从 #js_content 取正文」的方案；版权仅限个人用途。
-> - ⚠️ **关键点**：这句话**必须配上「技术方案链接」一起发**。一个完全没上下文的 Agent 单听"帮我把微信文章扒下来"是不知道怎么干的——它得先读到这份方案，才像「装了个 Skill」一样知道完整流程，并反过来引导你：*「你想弄哪个公众号 / 合集？我来帮你扒链接、再拿正文」*。
+> - **模板 B（只说公众号名）**：
+>   > 帮我把微信公众号【公众号名称】的历史文章（或某个合集）正文批量抓取，整理成 Excel。版权仅限个人用途。
 
-> 🔗 **去哪拿批量文章链接（获取入口）**
+> 🔗 **进阶：手动拿链接 / 看文档（可选）**
 >
-> - 技术方案（GitHub 公开版，发 Agent 时附上这个链接）：https://raw.githubusercontent.com/wanmeijianchi/wechat-mp-batch-scraper/main/wechat-mp-batch-scraper.md
 > - 操作后台：https://down.mptext.top/dashboard/article
 > - 说明文档（llms-full）：https://docs.mptext.top/llms-full.txt
-> - 上面是 mptext.top 提供的「公众号文章导出 / 链接获取」能力。拿到链接列表后，交给上面的抓取方案即可。
+> - 上面两个链接已内置在「复制给 Agent 的那句话」里，无需你手动操作。
 
 ---
 
